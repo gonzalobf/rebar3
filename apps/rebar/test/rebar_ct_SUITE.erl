@@ -197,6 +197,8 @@ init_per_group(dirs_and_suites, Config) ->
     AppDir1 = filename:join([AppDir, "apps", Name1]),
     rebar_test_utils:create_app(AppDir1, Name1, Vsn1, [kernel, stdlib]),
 
+    ok = file:write_file(filename:join([AppDir, "some_data_in_root.txt"]), <<"I'm a the content of a file in root">>),
+
     Suite1 = filename:join([AppDir1, "test", Name1 ++ "_SUITE.erl"]),
     ok = filelib:ensure_dir(Suite1),
     ok = file:write_file(Suite1, test_suite(Name1)),
@@ -215,6 +217,8 @@ init_per_group(dirs_and_suites, Config) ->
     ok = file:write_file(Suite3, test_suite("extras")),
     ok = filelib:ensure_dir(filename:join([AppDir, "test", "extras_SUITE_data", "dummy.txt"])),
     ok = file:write_file(filename:join([AppDir, "test", "extras_SUITE_data", "some_data.txt"]), <<"hello">>),
+    ok = file:make_symlink(
+        filename:join([AppDir, "some_data_in_root.txt"]), filename:join([AppDir, "test", "extras_SUITE_data", "some_data_in_root.txt"])),
 
     Suite4 = filename:join([AppDir, "root_SUITE.erl"]),
     ok = file:write_file(Suite4, test_suite("root")),
@@ -231,6 +235,11 @@ init_per_group(dirs_and_suites, Config) ->
 
     ok = filelib:ensure_dir(filename:join([AppDir, "apps", Name2, "app_root_SUITE_data", "dummy.txt"])),
     ok = file:write_file(filename:join([AppDir, "apps", Name2, "app_root_SUITE_data", "some_data.txt"]), <<>>),
+    ok = file:make_symlink(filename:join([AppDir, "some_data_in_root.txt"]), filename:join([AppDir,
+                                                                   "apps",
+                                                                   Name2,
+                                                                   "app_root_SUITE_data",
+                                                                   "some_data_in_root.txt"])),
 
     {ok, State} = rebar_test_utils:run_and_check(C, [], ["as", "test", "lock"], return),
 
@@ -793,6 +802,9 @@ suite_at_app_root(Config) ->
     DataFile = filename:join([AppDir, "_build", "test", "lib", Name2, "app_root_SUITE_data", "some_data.txt"]),
     true = filelib:is_file(DataFile),
 
+    SymFile = filename:join([AppDir, "_build", "test", "lib", Name2, "app_root_SUITE_data", "some_data_in_root.txt"]),
+    true = filelib:is_file(SymFile),
+
     %% Same test again using relative path to the suite from the project root
     {ok,Cwd} = file:get_cwd(),
     ok = file:set_cwd(AppDir),
@@ -847,7 +859,12 @@ data_in_app_test_folder(Config) ->
 
     DataFile = filename:join([AppDir, "_build", "test", "extras", "test", "extras_SUITE_data", "some_data.txt"]),
     true = filelib:is_file(DataFile),
-    ?assertEqual({ok, <<"hello">>}, file:read_file(DataFile)).
+    ?assertEqual({ok, <<"hello">>}, file:read_file(DataFile)),
+
+    SymFile = filename:join([AppDir, "_build", "test", "extras", "test", "extras_SUITE_data", "some_data_in_root.txt"]),
+    {ok, #file_info{type = regular}} = file:read_link_info(SymFile),
+    ?assertEqual({ok, <<"I'm a the content of a file in root">>}, file:read_file(SymFile)).
+
 
 %% this test probably only fails when this suite is run via rebar3 with the --cover flag
 data_dir_correct(Config) ->
