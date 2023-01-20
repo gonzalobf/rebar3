@@ -591,6 +591,8 @@ maybe_inject_test_dir(State, AppAcc, [App|Rest], Dir) ->
             Opts = inject_test_dir(rebar_state:opts(State), rebar_app_info:out_dir(App)),
             {rebar_state:opts(State, Opts), AppAcc ++ [App]};
         {ok, Path} ->
+            To = filename:join([rebar_app_info:out_dir(App), Path]),
+            ok = copy_bare_suites(Dir, To),
             Opts = inject_test_dir(rebar_app_info:opts(App), Path),
             {State, AppAcc ++ [rebar_app_info:opts(App, Opts)] ++ Rest};
         {error, badparent} ->
@@ -609,6 +611,8 @@ maybe_inject_test_dir(State, AppAcc, [], Dir) ->
             Opts = inject_test_dir(rebar_state:opts(State), ExtrasDir),
             {rebar_state:opts(State, Opts), AppAcc};
         {ok, Path} ->
+            To = filename:join([rebar_dir:base_dir(State), Path]),
+            ok = copy_bare_suites(Dir, To),
             Opts = inject_test_dir(rebar_state:opts(State), Path),
             {rebar_state:opts(State, Opts), AppAcc};
         {error, badparent} ->
