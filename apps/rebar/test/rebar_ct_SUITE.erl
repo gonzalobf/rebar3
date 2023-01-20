@@ -22,6 +22,7 @@
          single_dir_and_single_suite/1,
          suite_at_root/1,
          suite_at_app_root/1,
+         data_in_app_test_folder/1,
          data_dir_correct/1,
          cmd_label/1,
          cmd_config/1,
@@ -63,6 +64,8 @@
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("common_test/include/ct.hrl").
+-include_lib("kernel/include/file.hrl").
+
 
 all() -> [{group, basic_app},
           {group, multi_app},
@@ -100,7 +103,8 @@ groups() -> [{basic_app, [], [basic_app_default_dirs,
                                     all_suite,
                                     single_dir_and_single_suite,
                                     suite_at_root,
-                                    suite_at_app_root]},
+                                    suite_at_app_root,
+                                    data_in_app_test_folder]},
              {data_dirs, [], [data_dir_correct]},
              {ct_opts, [], [cmd_label,
                             cmd_config,
@@ -209,6 +213,8 @@ init_per_group(dirs_and_suites, Config) ->
     Suite3 = filename:join([AppDir, "test", "extras_SUITE.erl"]),
     ok = filelib:ensure_dir(Suite3),
     ok = file:write_file(Suite3, test_suite("extras")),
+    ok = filelib:ensure_dir(filename:join([AppDir, "test", "extras_SUITE_data", "dummy.txt"])),
+    ok = file:write_file(filename:join([AppDir, "test", "extras_SUITE_data", "some_data.txt"]), <<"hello">>),
 
     Suite4 = filename:join([AppDir, "root_SUITE.erl"]),
     ok = file:write_file(Suite4, test_suite("root")),
@@ -811,6 +817,37 @@ suite_at_app_root(Config) ->
     true = filelib:is_file(DataFile),
 
     ok.
+
+data_in_app_test_folder(Config) ->
+    AppDir = ?config(apps, Config),
+    State = ?config(s, Config),
+
+    LibDirs = rebar_dir:lib_dirs(State),
+    State1 = rebar_app_discover:do(State, LibDirs),
+
+    Providers = rebar_state:providers(State1),
+    Namespace = rebar_state:namespace(State1),
+    CommandProvider = providers:get_provider(ct, Providers, Namespace),
+    GetOptSpec = providers:opts(CommandProvider),
+    {ok, GetOptResult} = getopt:parse(GetOptSpec,
+                                      ["--suite=" ++ filename:join([AppDir,
+                                                                    "test",
+                                                                    "extras_SUITE"])]),
+
+    State2 = rebar_state:command_parsed_args(State1, GetOptResult),
+
+    Tests = rebar_prv_common_test:prepare_tests(State2),
+    {ok, NewState} = rebar_prv_common_test:compile(State2, Tests),
+    {ok, T} = Tests,
+    Opts = rebar_prv_common_test:translate_paths(NewState, T),
+
+    Suite = proplists:get_value(suite, Opts),
+    Expected = filename:join([AppDir, "_build", "test", "extras", "test", "extras_SUITE"]),
+    [Expected] = Suite,
+
+    DataFile = filename:join([AppDir, "_build", "test", "extras", "test", "extras_SUITE_data", "some_data.txt"]),
+    true = filelib:is_file(DataFile),
+    ?assertEqual({ok, <<"hello">>}, file:read_file(DataFile)).
 
 %% this test probably only fails when this suite is run via rebar3 with the --cover flag
 data_dir_correct(Config) ->
